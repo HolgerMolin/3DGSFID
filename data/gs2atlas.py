@@ -76,22 +76,18 @@ def fibonacci_sphere(n: int, radius: float = 1.0) -> np.ndarray:
 # Optimal transport matching
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _lap_worker(p1: np.ndarray, p2: np.ndarray, scaling: int = 1000, idx: int = 0):
-    cost_matrix = ot.dist(p1, p2, metric="sqeuclidean")
-    scaled = np.rint(cost_matrix * scaling).astype(int)
-    x, y, cost = lapjv(scaled)
-    return cost, x, y, idx
-
-
 def ot_match(scene_pts: np.ndarray, sphere_pts: np.ndarray):
     """
     One-shot linear assignment between scene_pts and sphere_pts.
 
+    Uses float32 for the cost matrix (half the memory of float64) and int32
+    after scaling, which is sufficient precision for lapjv.
+
     Returns (corrs_sphere_to_scene, corrs_scene_to_sphere).
     """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(_lap_worker, scene_pts, sphere_pts)
-        _, x, y, _ = future.result()
+    cost_matrix = ot.dist(scene_pts, sphere_pts, metric="sqeuclidean").astype(np.float32)
+    scaled = np.rint(cost_matrix * 1000).astype(np.int32)
+    x, y, _ = lapjv(scaled)
     return y, x  # corrs_sphere_to_scene, corrs_scene_to_sphere
 
 
@@ -223,7 +219,7 @@ def main():
         for line in lines
     ]
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=cfg["num_workers"]) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=cfg["num_workers"]) as executor:
         list(executor.map(_worker_wrapper, task_args))
 
 

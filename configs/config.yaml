@@ -22,7 +22,7 @@ gs2atlas:
   ply_iteration: 30000                    # iteration_{ply_iteration}/point_cloud.ply
   max_sh_degree: 0
   bound: 0.95
-  num_workers: 4
+  num_workers: 16             # set to physical core count of your machine
   segment_batch_size: 250
 
 # ─────────────────────────────────────────────
