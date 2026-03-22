@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────
+# Data paths
+# ─────────────────────────────────────────────
+data:
+  atlas_dir: "/path/to/atlases"          # directory of precomputed .pt atlas files
+  captions_json: "/path/to/captions.json"
+  clip_embeddings_file: "/path/to/clip_embeddings.pt"  # precomputed by data/precompute_clip.py
+  mean_file: null                         # path to per-channel mean .npy (or null to compute)
+  std_file: null                          # path to per-channel std  .npy (or null to compute)
+  atlas_resolution: 128                   # grid side length (128 → 128×128 grid)
+  atlas_channels: 17                      # xyz(3)+color(3)+opacity(1)+scale(3)+rot(4)+offset(3)
+  train_split: 0.99
+  val_split: 0.01
+
+# ─────────────────────────────────────────────
+# gs2atlas preprocessing
+# ─────────────────────────────────────────────
+gs2atlas:
+  source_root: "/path/to/gaussianverse"   # root with per-object scene folders
+  save_root: "/path/to/atlases"           # where to write .pt files
+  sphere2plane_path: "/path/to/sphere2plane.npy"  # download from GaussianVerse
+  ply_iteration: 30000                    # iteration_{ply_iteration}/point_cloud.ply
+  max_sh_degree: 0
+  bound: 0.95
+  num_workers: 4
+  segment_batch_size: 250
+
+# ─────────────────────────────────────────────
+# Model
+# ─────────────────────────────────────────────
+model:
+  backbone: "convnext_base"               # timm model name
+  pretrained: true
+  embed_dim: 512                          # must match CLIP text embed dim
+  clip_model: "ViT-B/32"
+
+# ─────────────────────────────────────────────
+# Training
+# ─────────────────────────────────────────────
+training:
+  output_dir: "./checkpoints"
+  batch_size: 256
+  num_workers: 8
+  epochs: 50
+  lr: 1.0e-4
+  weight_decay: 0.05
+  warmup_epochs: 2
+  grad_clip: 1.0
+  mixed_precision: true
+  log_interval: 50                        # steps between console logs
+  save_interval: 5                        # epochs between checkpoint saves
+  wandb_project: "3dgs-fid"
+  wandb_run_name: null                    # null → auto-generated
+
+# ─────────────────────────────────────────────
+# Evaluation / FID
+# ─────────────────────────────────────────────
+evaluation:
+  checkpoint: "./checkpoints/best.pth"
+  real_atlas_dir: "/path/to/real/atlases"
+  gen_atlas_dir: "/path/to/generated/atlases"
+  batch_size: 128
+  num_workers: 4
+  feature_save_dir: null                  # optional: save extracted features to .npy
