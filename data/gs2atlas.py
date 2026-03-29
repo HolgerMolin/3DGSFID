@@ -47,7 +47,7 @@ def load_ply(path: str, max_sh_degree: int = 0) -> torch.Tensor:
         names = [p.name for p in vert.properties if p.name.startswith(prefix)]
         return sorted(names, key=lambda n: int(n.split("_")[-1]))
 
-    color = np.column_stack([np.asarray(vert[n]) for n in sorted_attrs("color_")])
+    color = np.column_stack([np.asarray(vert[n]) for n in sorted_attrs("f_dc_")])
     scales = np.column_stack([np.asarray(vert[n]) for n in sorted_attrs("scale_")])
     rots = np.column_stack([np.asarray(vert[n]) for n in sorted_attrs("rot")])
 
@@ -113,9 +113,7 @@ def process_scene(
         print(f"[SKIP] {scene_name}.pt already exists")
         return
 
-    ply_path = os.path.join(
-        scene_dir, f"point_cloud/iteration_{ply_iteration}/point_cloud.ply"
-    )
+    ply_path = os.path.join(scene_dir, "point_cloud.ply")
     if not os.path.exists(ply_path):
         print(f"[MISSING] {ply_path}")
         return

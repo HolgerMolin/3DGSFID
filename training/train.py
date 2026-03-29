@@ -21,7 +21,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import yaml
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 
 # Project imports
@@ -138,7 +138,7 @@ def run_epoch(
         for batch in bar:
             atlases = batch["atlas"].to(device, non_blocking=True)  # (B, C, H, W)
 
-            with autocast(enabled=use_amp):
+            with autocast("cuda", enabled=use_amp):
                 atlas_embed = encoder(atlases)
 
                 if use_precomputed:
@@ -166,7 +166,7 @@ def run_epoch(
 
                 if global_step % log_interval == 0:
                     acc = retrieval_accuracy(
-                        atlas_embed.detach(), clip_embed.detach(), top_k=(1, 5)
+                        atlas_embed.detach(), clip_embed.detach(), top_k=(1, 5, 10)
                     )
                     log_data = {
                         "train/loss": loss.item(),
@@ -180,7 +180,13 @@ def run_epoch(
                         log_data["train/mse"] = loss_dict["mse"].item()
                     if wandb_run:
                         wandb_run.log(log_data)
-                    bar.set_postfix(loss=f"{loss.item():.4f}", T=f"{encoder.temperature.item():.3f}")
+                    bar.set_postfix(
+                        loss=f"{loss.item():.4f}",
+                        T=f"{encoder.temperature.item():.3f}",
+                        a2t1=f"{acc.get('atlas2text_top1', 0.0):.1f}%",
+                        a2t5=f"{acc.get('atlas2text_top5', 0.0):.1f}%",
+                        a2t10=f"{acc.get('atlas2text_top10', 0.0):.1f}%",
+                    )
 
             total_loss += loss.item()
             n_batches += 1
@@ -245,7 +251,7 @@ def main() -> None:
         clip_encoder = build_clip_encoder(cfg, device=str(device))
 
     # ── Loss ──────────────────────────────────────────────────────────────────
-    loss_fn = AlignmentLoss(mse_weight=0.0)  # pure contrastive; adjust if desired
+    loss_fn = AlignmentLoss(mse_weight=train_cfg.get("mse_weight", 0.0))
 
     # ── Optimizer ─────────────────────────────────────────────────────────────
     optimizer = torch.optim.AdamW(
@@ -255,7 +261,7 @@ def main() -> None:
         betas=(0.9, 0.999),
     )
     scheduler = cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
-    scaler = GradScaler(enabled=train_cfg.get("mixed_precision", True) and device.type == "cuda")
+    scaler = GradScaler("cuda", enabled=train_cfg.get("mixed_precision", True) and device.type == "cuda")
 
     # ── Resume ────────────────────────────────────────────────────────────────
     start_epoch = 0
