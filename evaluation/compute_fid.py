@@ -23,7 +23,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import torch
@@ -44,23 +44,31 @@ from data.dataset import load_or_compute_stats
 
 class AtlasOnlyDataset(Dataset):
     """
-    Loads atlas .pt files from a directory without requiring captions.
+    Loads atlas .pt files from a directory or an explicit path list (no captions).
 
     Args:
-        atlas_dir: Directory containing <id>.pt files.
+        atlas_dir: Directory containing <id>.pt files (ignored if `paths` is set).
         mean:      Per-channel mean tensor (C,) for normalisation, or None.
         std:       Per-channel std  tensor (C,) for normalisation, or None.
+        paths:     Optional explicit list of .pt paths; when set, used instead of glob.
     """
 
     def __init__(
         self,
-        atlas_dir: str,
+        atlas_dir: Optional[str] = None,
         mean: Optional[Tensor] = None,
         std: Optional[Tensor] = None,
+        paths: Optional[Sequence[Path]] = None,
     ) -> None:
-        self.paths = sorted(Path(atlas_dir).glob("*.pt"))
+        if paths is not None:
+            self.paths = sorted(Path(p) for p in paths)
+        elif atlas_dir is not None:
+            self.paths = sorted(Path(atlas_dir).glob("*.pt"))
+        else:
+            raise ValueError("Provide atlas_dir or paths.")
         if len(self.paths) == 0:
-            raise RuntimeError(f"No .pt atlas files found in '{atlas_dir}'.")
+            loc = atlas_dir if atlas_dir else "paths"
+            raise RuntimeError(f"No .pt atlas files found for {loc!r}.")
         self.mean = mean.view(-1, 1, 1).float() if mean is not None else None
         self.std = std.view(-1, 1, 1).float() if std is not None else None
 
@@ -82,20 +90,23 @@ class AtlasOnlyDataset(Dataset):
 @torch.no_grad()
 def extract_features(
     encoder: torch.nn.Module,
-    atlas_dir: str,
+    atlas_dir: Optional[str],
     mean: Optional[Tensor],
     std: Optional[Tensor],
     batch_size: int,
     num_workers: int,
     device: torch.device,
+    paths: Optional[Sequence[Path]] = None,
 ) -> np.ndarray:
     """
-    Pass all atlases in `atlas_dir` through `encoder` and collect embeddings.
+    Pass all atlases in `atlas_dir` (or `paths`) through `encoder` and collect embeddings.
 
     Returns:
         (N, D) float32 numpy array of L2-normalised embeddings.
     """
-    dataset = AtlasOnlyDataset(atlas_dir, mean=mean, std=std)
+    if paths is None and atlas_dir is None:
+        raise ValueError("Provide atlas_dir or paths.")
+    dataset = AtlasOnlyDataset(atlas_dir=atlas_dir, mean=mean, std=std, paths=paths)
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -105,8 +116,9 @@ def extract_features(
     )
 
     encoder.eval()
+    desc = atlas_dir if atlas_dir is not None else f"{len(dataset)} atlases"
     features = []
-    for batch in tqdm(loader, desc=f"Extracting [{atlas_dir}]", leave=False):
+    for batch in tqdm(loader, desc=f"Extracting [{desc}]", leave=False):
         batch = batch.to(device, non_blocking=True)
         embed = encoder(batch)          # (B, D), already L2-normalised
         features.append(embed.cpu().numpy())

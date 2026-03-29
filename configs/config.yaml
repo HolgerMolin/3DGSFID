@@ -2,11 +2,13 @@
 # Data paths
 # ─────────────────────────────────────────────
 data:
-  atlas_dir: "/path/to/atlases"          # directory of precomputed .pt atlas files
-  captions_json: "/path/to/captions.json"
-  clip_embeddings_file: "/path/to/clip_embeddings.pt"  # precomputed by data/precompute_clip.py
-  mean_file: null                         # path to per-channel mean .npy (or null to compute)
-  std_file: null                          # path to per-channel std  .npy (or null to compute)
+  live_load: true                         # true → load from raw GaussianVerse dirs on-the-fly
+                                          # false → load from precomputed .pt atlas files
+  atlas_dir: "/path/to/atlases"          # used only when live_load: false
+  captions_json: "/home/tiangexiang/gen3d/gaussianverse/captions.json"
+  clip_embeddings_file: "/home/hmolin/3DGSFID/data/clip_embeddings.pt"  # precomputed by data/precompute_clip.py
+  mean_file: "/home/hmolin/3DGSFID/data/atlas_mean.npy"
+  std_file: "/home/hmolin/3DGSFID/data/atlas_std.npy"
   atlas_resolution: 128                   # grid side length (128 → 128×128 grid)
   atlas_channels: 17                      # xyz(3)+color(3)+opacity(1)+scale(3)+rot(4)+offset(3)
   train_split: 0.99
@@ -16,13 +18,12 @@ data:
 # gs2atlas preprocessing
 # ─────────────────────────────────────────────
 gs2atlas:
-  source_root: "/path/to/gaussianverse"   # root with per-object scene folders
-  save_root: "/path/to/atlases"           # where to write .pt files
-  sphere2plane_path: "/path/to/sphere2plane.npy"  # download from GaussianVerse
-  ply_iteration: 30000                    # iteration_{ply_iteration}/point_cloud.ply
+  source_root: "/home/tiangexiang/gen3d/gaussianverse"   # root with per-object scene folders
+  save_root: "/home/hmolin/3DGSFID/data/atlases"           # where to write .pt files
+  sphere2plane_path: "/home/tiangexiang/gen3d/gaussianverse/sphere2plane.npy"  # download from GaussianVerse
   max_sh_degree: 0
   bound: 0.95
-  num_workers: 16             # set to physical core count of your machine
+  num_workers: 12            # set to physical core count of your machine
   segment_batch_size: 250
 
 # ─────────────────────────────────────────────
@@ -40,15 +41,16 @@ model:
 training:
   output_dir: "./checkpoints"
   batch_size: 256
-  num_workers: 8
-  epochs: 50
+  num_workers: 12
+  epochs: 20
   lr: 1.0e-4
-  weight_decay: 0.05
-  warmup_epochs: 2
+  weight_decay: 0.1
+  warmup_epochs: 0.5
   grad_clip: 1.0
   mixed_precision: true
   log_interval: 50                        # steps between console logs
   save_interval: 5                        # epochs between checkpoint saves
+  mse_weight: 0.2                         # MSE regulariser weight (0 = pure contrastive)
   wandb_project: "3dgs-fid"
   wandb_run_name: null                    # null → auto-generated
 
